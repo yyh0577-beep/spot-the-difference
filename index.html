@@ -114,6 +114,16 @@ tr.top1 td{color:#fff}tr.top1 td:first-child{color:var(--red)}
 .pair figure{margin:0}.pair figcaption{font-family:"Black Han Sans";font-size:clamp(18px,2.2vw,26px);margin:0 0 6px 2px}
 @media(max-width:560px) and (orientation:portrait){.pair{grid-template-columns:minmax(0,1fr)}}
 #pResult .res{grid-template-columns:minmax(0,1fr)}
+.pair .stage{width:100%;max-height:calc(100vh - 190px);margin:0 auto}
+#pResult .pair .stage{max-height:calc(100vh - 120px)}
+@media(min-width:900px),(orientation:landscape) and (min-width:600px){
+  #pResult{display:grid;grid-template-columns:clamp(150px,22vw,240px) minmax(0,1fr);gap:16px;align-items:start}
+  #pResult .pair{margin-top:0!important}
+  #pResult .score{font-size:clamp(48px,7vw,84px)}
+  #pResult .card{padding:12px}
+}
+@media(orientation:landscape) and (max-height:500px){#pResult .pair .stage{max-height:calc(100vh - 50px)}.pair figcaption{font-size:16px;margin-bottom:2px}}
+@media(min-width:900px) and (max-height:900px){#hReveal .card{padding:14px 20px}#hReveal h2{font-size:22px!important}}
 .status{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);padding:8px 16px;border-radius:999px;background:#000d;border:1px solid var(--line);font-size:14px;z-index:20}
 .modal{position:fixed;inset:0;background:#000b;display:grid;place-items:center;z-index:30;padding:20px}
 .modal .card{max-width:420px;width:100%;text-align:center}
@@ -482,6 +492,7 @@ setInterval(()=>{
 setInterval(()=>{if(H&&link)broadcast()},5000);   // 끊겼다 들어온 아이도 화면이 맞도록
 
 function renderHost(){
+  if(renderHost.ph!==H.phase){renderHost.ph=H.phase;try{scrollTo(0,0)}catch(e){}}
   const ph=H.phase, R=getRound(H.round);
   const label={lobby:"대기실",memo:(R?R.name+" · ":"")+"기억하세요",find:(R?R.name+" · ":"")+"달라진 곳을 찾으세요",locked:"채점 중…",reveal:(R?R.name+" · ":"")+"정답 공개",board:"종합 순위"}[ph];
   $("hPhase").textContent=label;
@@ -584,6 +595,7 @@ function saveDraft(){store.set("sd-draft",{code:P.code,round:P.round,marks:P.mar
 function submit(){if(!plink)return;plink.send({t:"submit",cid:P.cid,round:P.round,marks:P.marks});P.submitted=true;renderPlayer()}
 function pView(v){show(["pJoin"],v==="join");show(["pWait"],v==="wait");show(["pGame"],v==="game");show(["pResult"],v==="result")}
 function renderPlayer(){
+  if(P.st&&renderPlayer.ph!==P.st.phase){renderPlayer.ph=P.st.phase;try{scrollTo(0,0)}catch(e){}}
   const m=P.st; if(!m) return;
   $("pJoinBtn").disabled=false;$("pJoinMsg").textContent="";
   const R=getRound(m.round);
