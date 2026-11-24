@@ -415,7 +415,8 @@ function openRoom(tries){
   status("방 여는 중…");
   link=hostLink(H.code,onHostMsg,()=>{status("");renderHost()},type=>{
     if(type==="unavailable-id"){
-      if(tries<8){status("방 코드를 다시 확보하는 중…");setTimeout(()=>openRoom(tries+1),3000)}
+      if(H.order.length===0){H=newHostState(String(Math.floor(1000+Math.random()*9000)));saveH();renderHost();openRoom(0)}   // 다른 선생님이 쓰는 코드 → 바로 새 코드
+      else if(tries<8){status("방 코드를 다시 확보하는 중…");setTimeout(()=>openRoom(tries+1),3000)}
       else{H=newHostState(String(Math.floor(1000+Math.random()*9000)));saveH();openRoom(0);renderHost()}
     } else if(type==="network"||type==="server-error"||type==="socket-error"){status("인터넷 연결을 확인해 주세요 — 다시 시도 중…");setTimeout(()=>openRoom(tries),4000)}
   });
