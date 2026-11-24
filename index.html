@@ -36,7 +36,8 @@ input,select{min-height:52px;border-radius:12px;border:1px solid var(--line);bac
 /* stage image */
 .stage{position:relative;width:100%;margin:0 auto;border-radius:14px;overflow:hidden;background:#000;box-shadow:0 20px 60px #0009;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
 .stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;pointer-events:none;-webkit-user-drag:none}
-.stage svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.stage svg.ov{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.gsvg{position:absolute;inset:0;pointer-events:none}.gsvg svg{display:block;width:100%;height:100%}
 .mk{fill:#ffffff22;stroke:#fff;stroke-width:3;vector-effect:non-scaling-stroke}
 .mk.ok{stroke:var(--ok);fill:#2fd17a33}.mk.bad{stroke:var(--bad);fill:#ff5d6c33}
 .mkn{fill:#fff;font-family:"Noto Sans KR",sans-serif;font-weight:900;text-anchor:middle;dominant-baseline:central;paint-order:stroke;stroke:#000;stroke-width:.5px;pointer-events:none}
@@ -72,6 +73,11 @@ input,select{min-height:52px;border-radius:12px;border:1px solid var(--line);bac
 .rbtn.done{border-color:#3a3a46}.rbtn.done img{filter:grayscale(1);opacity:.3}
 .rbtn.done::after{content:"완료";position:absolute;top:6px;right:6px;font-size:12px;font-weight:700;background:#000a;padding:2px 8px;border-radius:9px}
 .rbtn:hover,.rbtn:focus-visible{border-color:var(--red)}
+.rbtn .thumb{position:absolute;inset:0;opacity:.6}.rbtn .thumb svg{width:100%;height:100%;display:block}
+.rbtn.any{background:repeating-linear-gradient(45deg,#1d1d26 0 14px,#24242f 14px 28px)}.rbtn.any span{inset:0;display:grid;place-items:center;background:none}
+.seg{display:inline-flex;gap:4px;padding:4px;border-radius:14px;background:#0f0f15;border:1px solid var(--line);margin-top:10px;flex-wrap:wrap}
+.segb{min-height:44px;padding:6px 16px;border:0;border-radius:10px;background:none;cursor:pointer;font-weight:700;color:var(--dim)}
+.segb small{font-weight:400;opacity:.8}.segb.on{background:var(--red);color:#fff}
 .settings{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}
 .settings label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--dim)}
 /* results */
@@ -155,6 +161,10 @@ tr.top1 td{color:#fff}tr.top1 td:first-child{color:var(--red)}
       </div>
       <h2 style="font-size:24px;margin-top:22px">라운드 시작</h2>
       <div class="rounds" id="hRounds"></div>
+      <h2 style="font-size:24px;margin-top:24px">자동 생성 그림 <span class="muted" style="font:400 15px 'Noto Sans KR'">누를 때마다 새 그림이 만들어져요 · 무제한</span></h2>
+      <div class="seg" id="hLevel" role="group" aria-label="난이도"></div>
+      <div class="rounds" id="hGen"></div>
+      <p class="muted" id="hGenN" style="margin:8px 0 0;font-size:14px"></p>
       <div class="row" style="margin-top:18px">
         <button class="btn" id="hShowBoard">종합 순위 보기</button>
         <button class="btn" id="hReset">점수 초기화</button>
@@ -238,6 +248,7 @@ tr.top1 td{color:#fff}tr.top1 td:first-child{color:var(--red)}
 
 <script src="peerjs.min.js"></script>
 <script src="qrcode.js"></script>
+<script src="gen.js"></script>
 <script>
 {
 /* ---------- 데이터: 슬라이드에서 뽑은 그림과 정답 위치 (0~1 비율 좌표: 중심x, 중심y, 반지름x, 반지름y) ---------- */
@@ -250,6 +261,18 @@ const ROUNDS = [
  {name:"5라운드",a:"img/r5a.jpg",b:"img/r5b.jpg",ar:1.8801,ans:[[0.0368,0.358,0.0368,0.051],[0.8847,0.358,0.0368,0.051],[0.9649,0.4182,0.0142,0.0367],[0.8621,0.5849,0.0142,0.0307]]}
 ];
 const MAX_MARKS = 5;
+/* 라운드 번호: 숫자 = 슬라이드 그림, "g|주제|번호|난이도" = 자동 생성 그림 */
+const GCACHE = {};
+function getRound(id){
+  if(typeof id==="number") return ROUNDS[id]||null;
+  if(typeof id!=="string") return null;
+  if(GCACHE[id]) return GCACHE[id];
+  const [g,theme,seed,level]=id.split("|");
+  if(g!=="g"||!window.SpotGen||!SpotGen.THEMES[theme]||!SpotGen.DIFF[level]||!/^\d{1,7}$/.test(seed)) return null;
+  const k=Object.keys(GCACHE); if(k.length>12) delete GCACHE[k[0]];
+  return GCACHE[id]=SpotGen.make(theme,+seed,level);
+}
+const newGenId=(theme,level)=>`g|${theme}|${1+Math.floor(Math.random()*999999)}|${level}`;
 const PREFIX = "spotdiff-kr-v1-";
 const qs = new URLSearchParams(location.search);
 const LOCAL = qs.has("local");           // ?local : 같은 컴퓨터 탭끼리 테스트용 (인터넷 불필요)
@@ -263,7 +286,7 @@ function ask(text){return new Promise(res=>{$("mText").textContent=text;$("modal
 
 /* ---------- 채점: 정답 원 하나당 한 번만 인정, 나머지는 오답 ---------- */
 function grade(round, marks){
-  const R = ROUNDS[round], used = new Set(); let correct = 0;
+  const R = getRound(round), used = new Set(); let correct = 0;
   const res = marks.map(m => {
     let best=-1, bd=9;
     R.ans.forEach(([cx,cy,rx,ry],i)=>{
@@ -281,16 +304,20 @@ function grade(round, marks){
 
 /* ---------- 그림 + 표시 그리기 ---------- */
 function stage(el, round, which, opt={}){
-  const R = ROUNDS[round];
+  const R = getRound(round); if(!R) return;
   el.style.aspectRatio = R.ar;
   let svg = "";
   if(opt.dots) svg += opt.dots.map(d=>`<circle class="dot" cx="${d.x*100}" cy="${d.y*100/R.ar}" r="0.7"/>`).join("");
   if(opt.ans) svg += R.ans.map(([cx,cy,rx,ry],i)=>`<ellipse class="ans" style="animation-delay:${i*.35}s" cx="${cx*100}" cy="${cy*100/R.ar}" rx="${rx*100}" ry="${ry*100/R.ar}"/>`).join("");
   if(opt.marks) svg += opt.marks.map((m,i)=>{const cls=opt.hits?(opt.hits[i]?" ok":" bad"):"";return `<circle class="mk${cls}" cx="${m.x*100}" cy="${m.y*100/R.ar}" r="3.2"/><text class="mkn" x="${m.x*100}" y="${m.y*100/R.ar}" font-size="3">${i+1}</text>`}).join("");
   const key=round+which;
-  if(el.dataset.k!==key){el.dataset.k=key;el.innerHTML=`<img src="${which==="a"?R.a:R.b}" alt="" draggable="false"><svg viewBox="0 0 100 ${100/R.ar}" preserveAspectRatio="none"></svg>`}
-  el.querySelector("svg").innerHTML=svg;
+  if(el.dataset.k!==key){el.dataset.k=key;
+    const uq="s"+(++stage.n);
+    const pic=R.svgA?`<div class="gsvg">${(which==="a"?R.svgA:R.svgB).replace(/id="(\w+)"/g,`id="$1${uq}"`).replace(/url\(#(\w+)\)/g,`url(#$1${uq})`)}</div>`:`<img src="${which==="a"?R.a:R.b}" alt="" draggable="false">`;
+    el.innerHTML=pic+`<svg class="ov" viewBox="0 0 100 ${100/R.ar}" preserveAspectRatio="none"></svg>`}
+  el.querySelector("svg.ov").innerHTML=svg;
 }
+stage.n=0;
 function preload(){ROUNDS.forEach(r=>{new Image().src=r.a;new Image().src=r.b})}
 
 /* ---------- 사운드 (선생님 화면만) ---------- */
@@ -414,9 +441,10 @@ function reveal(){
   if(H.phase!=="locked") return;
   const rows=H.order.map(cid=>{const s=H.subs[cid]||{marks:[],ms:null};const g=grade(H.round,s.marks);return {cid,name:H.players[cid].name,marks:s.marks,ms:s.ms,...g}});
   rows.sort((a,b)=>b.score-a.score||b.correct-a.correct||(a.ms??1e12)-(b.ms??1e12));
-  rows.forEach((r,i)=>{r.rank=i+1;const p=H.players[r.cid];const prev=p.hist[H.round]||0;p.total+=r.score-prev;p.hist[H.round]=r.score});
+  rows.forEach((r,i)=>{r.rank=i+1;const p=H.players[r.cid];const prev=p.hist[String(H.round)]||0;p.total+=r.score-prev;p.hist[String(H.round)]=r.score});
   H.last={round:H.round,rows};
-  if(!H.done.includes(H.round)) H.done.push(H.round);
+  if(typeof H.round==="number"&&!H.done.includes(H.round)) H.done.push(H.round);
+  H.gplayed=(H.gplayed||0)+(typeof H.round==="string"?1:0);
   H.phase="reveal";saveH();broadcast();renderHost();beep(523,.15);setTimeout(()=>beep(784,.3),160);
 }
 function setPhase(ph){H.phase=ph;H.endsAt=0;saveH();broadcast();renderHost()}
@@ -437,7 +465,7 @@ setInterval(()=>{
 setInterval(()=>{if(H&&link)broadcast()},5000);   // 끊겼다 들어온 아이도 화면이 맞도록
 
 function renderHost(){
-  const ph=H.phase, R=ROUNDS[H.round];
+  const ph=H.phase, R=getRound(H.round);
   const label={lobby:"대기실",memo:(R?R.name+" · ":"")+"기억하세요",find:(R?R.name+" · ":"")+"달라진 곳을 찾으세요",locked:"채점 중…",reveal:(R?R.name+" · ":"")+"정답 공개",board:"종합 순위"}[ph];
   $("hPhase").textContent=label;
   $("hCodeSm").textContent="코드 "+H.code;
@@ -453,6 +481,10 @@ function renderHost(){
     try{const q=qrcode(0,"M");q.addData(url);q.make();$("hQr").innerHTML=q.createSvgTag({cellSize:6,margin:2,scalable:true})}catch(e){$("hQr").classList.add("hide")}
     $("hN").textContent=H.order.length?`(${H.order.length})`:"";
     $("hChips").innerHTML=H.order.length?H.order.map(c=>{const p=H.players[c];return `<span class="chip${p.conn?"":" off"}">${esc(p.name)} <span class="muted">${p.total}</span><button data-kick="${esc(c)}" aria-label="내보내기">×</button></span>`}).join(""):'<span class="muted">QR을 찍거나 코드를 입력하면 여기 이름이 나타나요.</span>';
+    const lv=H.level||"normal";
+    $("hLevel").innerHTML=Object.entries(SpotGen.DIFF).map(([k,d])=>`<button class="segb${k===lv?" on":""}" data-level="${k}" aria-pressed="${k===lv}">${d.label} <small>${d.n}곳</small></button>`).join("");
+    if(!$("hGen").dataset.ready){$("hGen").dataset.ready=1;$("hGen").innerHTML=SpotGen.THEME_ORDER.map(t=>`<button class="rbtn" data-theme="${t}"><div class="thumb">${SpotGen.make(t,3,"normal").svgA}</div><span>${SpotGen.THEMES[t].name}</span></button>`).join("")+`<button class="rbtn any" data-theme="any"><span>아무 주제나</span></button>`}
+    $("hGenN").textContent=H.gplayed?`지금까지 ${H.gplayed}판 했어요`:"";
     $("hRounds").innerHTML=ROUNDS.map((r,i)=>`<button class="rbtn${H.done.includes(i)?" done":""}" data-round="${i}"><img src="${r.a}" alt=""><span>${r.name}</span></button>`).join("");
   }
   if(["memo","find","locked"].includes(ph)){
@@ -464,7 +496,7 @@ function renderHost(){
   if(ph==="reveal"&&H.last){
     const rows=H.last.rows;
     stage($("hRStage"),H.last.round,"b",{ans:true,dots:rows.flatMap(r=>r.marks)});
-    $("hRTitle").textContent=ROUNDS[H.last.round].name+" 결과";
+    $("hRTitle").textContent=(getRound(H.last.round)||{name:""}).name+" 결과";
     $("hRTable").innerHTML=rows.map(r=>`<tr class="${r.rank===1?"top1":""}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.correct}</td><td>${r.wrong}</td><td><b>${r.score>0?"+":""}${r.score}</b></td><td>${r.ms==null?"–":(r.ms/1000).toFixed(1)+"초"}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">참가자가 없어요</td></tr>';
   }
   if(ph==="board"){
@@ -476,6 +508,8 @@ function renderHostSub(){
   $("hSub").textContent=H.phase==="memo"?`${online}명이 보고 있어요`:`제출 ${n} / ${online}`;
 }
 $("hRounds").addEventListener("click",e=>{const b=e.target.closest("[data-round]");if(b)startRound(+b.dataset.round)});
+$("hGen").addEventListener("click",e=>{const b=e.target.closest("[data-theme]");if(!b)return;const th=b.dataset.theme==="any"?SpotGen.THEME_ORDER[Math.floor(Math.random()*SpotGen.THEME_ORDER.length)]:b.dataset.theme;startRound(newGenId(th,H.level||"normal"))});
+$("hLevel").addEventListener("click",e=>{const b=e.target.closest("[data-level]");if(!b)return;H.level=b.dataset.level;saveH();renderHost()});
 $("hChips").addEventListener("click",async e=>{const b=e.target.closest("[data-kick]");if(!b)return;const p=H.players[b.dataset.kick];if(p&&await ask(`${p.name} 학생을 내보낼까요? 점수도 지워져요.`))kick(b.dataset.kick)});
 $("hSkip").onclick=()=>{if(H.phase==="memo")toFind();else if(H.phase==="find")lockRound()};
 $("hToBoard").onclick=()=>setPhase("board");
@@ -530,7 +564,8 @@ function pView(v){show(["pJoin"],v==="join");show(["pWait"],v==="wait");show(["p
 function renderPlayer(){
   const m=P.st; if(!m) return;
   $("pJoinBtn").disabled=false;$("pJoinMsg").textContent="";
-  const R=ROUNDS[m.round];
+  const R=getRound(m.round);
+  if(!R&&m.phase!=="lobby"&&m.phase!=="board") return;
   if(m.phase==="lobby"||m.phase==="board"){
     pView("wait");
     $("pWName").textContent=`${m.name} · ${m.total}점 · ${m.n}명 중 ${m.rank}등`;
@@ -562,7 +597,7 @@ function renderPlayer(){
 }
 $("pStage").addEventListener("pointerdown",e=>{
   const m=P.st; if(!m||m.phase!=="find"||P.submitted) return;
-  const R=ROUNDS[m.round], b=$("pStage").getBoundingClientRect();
+  const R=getRound(m.round), b=$("pStage").getBoundingClientRect();
   const x=(e.clientX-b.left)/b.width, y=(e.clientY-b.top)/b.height;
   if(x<0||x>1||y<0||y>1) return;
   const hit=P.marks.findIndex(k=>Math.hypot(k.x-x,(k.y-y)/R.ar)<0.035);
