@@ -109,7 +109,11 @@ tr.top1 td{color:#fff}tr.top1 td:first-child{color:var(--red)}
 .score{font-family:"Black Han Sans";font-size:clamp(56px,14vw,110px);line-height:1}
 .rot{display:none;text-align:center;margin:8px 0 0;font-size:14px}
 @media(orientation:portrait) and (max-width:600px){.rot{display:block}}
-@media(orientation:landscape) and (max-height:500px){.pl{padding:6px}.pl .bar{margin-bottom:2px}.pl .clock{font-size:28px}.meter{margin-bottom:6px}#pStage{max-height:calc(100vh - 110px);width:auto;max-width:100%}#pRStage{max-height:calc(100vh - 24px);width:auto;max-width:100%}.tools{margin-top:6px}.btn.big{min-height:48px;font-size:17px}}
+@media(orientation:landscape) and (max-height:500px){.pl{padding:6px}.pl .bar{margin-bottom:2px}.pl .clock{font-size:28px}.meter{margin-bottom:6px}#pStage{max-height:calc(100vh - 110px);width:auto;max-width:100%}#pResult .stage{max-height:calc(100vh - 60px);width:auto;max-width:100%}.tools{margin-top:6px}.btn.big{min-height:48px;font-size:17px}}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.pair figure{margin:0}.pair figcaption{font-family:"Black Han Sans";font-size:clamp(18px,2.2vw,26px);margin:0 0 6px 2px}
+@media(max-width:560px) and (orientation:portrait){.pair{grid-template-columns:minmax(0,1fr)}}
+#pResult .res{grid-template-columns:minmax(0,1fr)}
 .status{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);padding:8px 16px;border-radius:999px;background:#000d;border:1px solid var(--line);font-size:14px;z-index:20}
 .modal{position:fixed;inset:0;background:#000b;display:grid;place-items:center;z-index:30;padding:20px}
 .modal .card{max-width:420px;width:100%;text-align:center}
@@ -184,8 +188,12 @@ tr.top1 td{color:#fff}tr.top1 td:first-child{color:var(--red)}
     </div>
   </div>
 
-  <div id="hReveal" class="res hide">
-    <div><div class="stage" id="hRStage"></div><p class="muted" style="margin:8px 2px">노란 점 = 아이들이 표시한 곳</p></div>
+  <div id="hReveal" class="hide">
+    <div class="pair">
+      <figure><figcaption>전 · 원래 그림</figcaption><div class="stage" id="hRStageA"></div></figure>
+      <figure><figcaption>후 · 바뀐 그림</figcaption><div class="stage" id="hRStage"></div></figure>
+    </div>
+    <p class="muted" style="margin:8px 2px 16px">빨간 원 = 달라진 곳 · 노란 점 = 아이들이 표시한 곳</p>
     <div class="card">
       <h2 style="font-size:28px;margin-bottom:8px" id="hRTitle">라운드 결과</h2>
       <table><thead><tr><th>순위</th><th>이름</th><th>정답</th><th>오답</th><th>점수</th><th>시간</th></tr></thead><tbody id="hRTable"></tbody></table>
@@ -235,13 +243,16 @@ tr.top1 td{color:#fff}tr.top1 td:first-child{color:var(--red)}
 
   <div id="pResult" class="hide">
     <div class="res">
-      <div class="stage" id="pRStage"></div>
       <div class="card" style="text-align:center">
         <div class="muted">이번 라운드</div>
         <div class="score" id="pRScore"></div>
         <p id="pRDetail" style="font-size:18px;margin:8px 0"></p>
         <p class="muted" id="pRRank"></p>
       </div>
+    </div>
+    <div class="pair" style="margin-top:12px">
+      <figure><figcaption>전</figcaption><div class="stage" id="pRStageA"></div></figure>
+      <figure><figcaption>후 · 내가 표시한 곳</figcaption><div class="stage" id="pRStage"></div></figure>
     </div>
   </div>
 </section>
@@ -502,6 +513,7 @@ function renderHost(){
   }
   if(ph==="reveal"&&H.last){
     const rows=H.last.rows;
+    stage($("hRStageA"),H.last.round,"a",{ans:true});
     stage($("hRStage"),H.last.round,"b",{ans:true,dots:rows.flatMap(r=>r.marks)});
     $("hRTitle").textContent=(getRound(H.last.round)||{name:""}).name+" 결과";
     $("hRTable").innerHTML=rows.map(r=>`<tr class="${r.rank===1?"top1":""}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.correct}</td><td>${r.wrong}</td><td><b>${r.score>0?"+":""}${r.score}</b></td><td>${r.ms==null?"–":(r.ms/1000).toFixed(1)+"초"}</td></tr>`).join("")||'<tr><td colspan="6" class="muted">참가자가 없어요</td></tr>';
@@ -587,6 +599,7 @@ function renderPlayer(){
   if(m.phase==="reveal"){
     pView("result");
     const r=m.result;
+    stage($("pRStageA"),m.round,"a",{ans:true});
     stage($("pRStage"),m.round,"b",{ans:true,marks:r?r.marks:[],hits:r?r.hits:[]});
     $("pRScore").textContent=r?(r.score>0?"+":"")+r.score:"0";
     $("pRScore").style.color=r&&r.score>0?"var(--ok)":r&&r.score<0?"var(--bad)":"var(--ink)";
